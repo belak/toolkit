@@ -13,8 +13,8 @@ services as they wrap libraries to expose a more ergonomic interface.
   timeouts.
 - web - A wrapper around a number of packages to provide a convenient
   one-stop-shop for interfacing with http services. It wraps net/http,
-  encoding/json, and formam. Currently, you must choose a router to use.
-  go-chi/chi is the author's current recommended choice.
+  encoding/json, and formam. You must choose a router to use. go-chi/chi
+  is the author's current recommended choice.
 
 Package ideas:
 
