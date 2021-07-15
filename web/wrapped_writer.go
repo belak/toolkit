@@ -31,6 +31,11 @@ type ResponseWriter interface {
 // NewResponseWriter wraps an http.ResponseWriter, returning a proxy that allows
 // you to hook into various parts of the response process.
 func NewResponseWriter(w http.ResponseWriter, protoMajor int) ResponseWriter {
+	// Short-circuit the logic if this is alreayd wrapped.
+	if ww, ok := w.(ResponseWriter); ok {
+		return ww
+	}
+
 	_, fl := w.(http.Flusher)
 
 	bw := basicWriter{ResponseWriter: w}
