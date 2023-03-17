@@ -5,23 +5,23 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/rs/zerolog"
+	"golang.org/x/exp/slog"
 )
 
-func LoggerMiddleware(logger zerolog.Logger) func(next http.Handler) http.Handler {
+func LoggerMiddleware(logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ww := NewResponseWriter(w, r.ProtoMajor)
+			ww := NewResponseWriter(w)
 
 			t1 := time.Now()
 			defer func() {
-				logger.Info().
-					Str("method", r.Method).
-					Stringer("url", r.URL).
-					Int("size", ww.BytesWritten()).
-					Int("status", ww.Status()).
-					Dur("duration", time.Since(t1)).
-					Msg("request complete")
+				logger.With(slog.Group("http",
+					slog.String("method", r.Method),
+					slog.String("url", r.URL.String()),
+					slog.Int("size", ww.BytesWritten()),
+					slog.Int("status", ww.Status()),
+					slog.Duration("duration", time.Since(t1)),
+				)).Info("request complete")
 			}()
 
 			next.ServeHTTP(ww, r)
@@ -29,14 +29,14 @@ func LoggerMiddleware(logger zerolog.Logger) func(next http.Handler) http.Handle
 	}
 }
 
-func RecovererMiddleware(logger zerolog.Logger) func(next http.Handler) http.Handler {
+func RecovererMiddleware(logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rvr := recover(); rvr != nil && rvr != http.ErrAbortHandler {
-					logger.Error().
-						Str("stack", string(debug.Stack())).
-						Msg("panic while handling request")
+					logger.With(
+						slog.String("stack", string(debug.Stack())),
+					).Error("panic while handling request")
 
 					w.WriteHeader(http.StatusInternalServerError)
 				}

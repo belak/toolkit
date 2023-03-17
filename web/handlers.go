@@ -12,7 +12,7 @@ func WrapHandler(f HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rw, ok := w.(ResponseWriter)
 		if !ok {
-			rw = NewResponseWriter(w, r.ProtoMajor)
+			rw = NewResponseWriter(w)
 		}
 		err := f(rw, r)
 		DefaultErrorHandler(rw, r, err)
