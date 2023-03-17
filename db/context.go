@@ -2,20 +2,23 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"github.com/belak/toolkit/internal"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-var querrierContextKey = internal.ContextKey("querrier")
-var ErrNoQuerrier = errors.New("Querrier missing from context")
+var (
+	querrierContextKey = internal.ContextKey("querrier")
+	ErrNoQuerrier      = errors.New("Querrier missing from context")
+)
 
 func WithQuerier(ctx context.Context, q Querier) context.Context {
 	return context.WithValue(ctx, querrierContextKey, q)
 }
 
-func GetQuerrier(ctx context.Context) (Querier, bool) {
+func ExtractQuerrier(ctx context.Context) (Querier, bool) {
 	ret := ctx.Value(querrierContextKey)
 
 	if q, ok := ret.(Querier); ok {
@@ -25,38 +28,39 @@ func GetQuerrier(ctx context.Context) (Querier, bool) {
 	return nil, false
 }
 
-func Exec(ctx context.Context, query string, params ...interface{}) (sql.Result, error) {
-	q, ok := GetQuerrier(ctx)
+func Exec(ctx context.Context, query string, args ...interface{}) (pgconn.CommandTag, error) {
+	q, ok := ExtractQuerrier(ctx)
+	if !ok {
+		return pgconn.CommandTag{}, ErrNoQuerrier
+	}
+
+	return q.Exec(ctx, query, args...)
+}
+
+func Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error) {
+	q, ok := ExtractQuerrier(ctx)
 	if !ok {
 		return nil, ErrNoQuerrier
 	}
 
-	return q.Exec(ctx, query, params...)
+	return q.Query(ctx, query, args...)
 }
 
-func Get(ctx context.Context, dest interface{}, query string, params ...interface{}) error {
-	q, ok := GetQuerrier(ctx)
+func QueryRow(ctx context.Context, query string, args ...interface{}) pgx.Row {
+	q, ok := ExtractQuerrier(ctx)
 	if !ok {
-		return ErrNoQuerrier
+		return &erroredRow{}
 	}
 
-	return q.Get(ctx, dest, query, params...)
+	return q.QueryRow(ctx, query, args...)
 }
 
-func Select(ctx context.Context, dest interface{}, query string, params ...interface{}) error {
-	q, ok := GetQuerrier(ctx)
-	if !ok {
-		return ErrNoQuerrier
-	}
+// We need a minimal pgx.Row type to return ErrNoQuerier if the querier wasn't
+// found in the context
+var _ pgx.Row = (*erroredRow)(nil)
 
-	return q.Select(ctx, dest, query, params...)
-}
+type erroredRow struct{}
 
-func Query(ctx context.Context, query string, params ...interface{}) (*Rows, error) {
-	q, ok := GetQuerrier(ctx)
-	if !ok {
-		return nil, ErrNoQuerrier
-	}
-
-	return q.Query(ctx, query, params...)
+func (*erroredRow) Scan(targets ...any) error {
+	return ErrNoQuerrier
 }
